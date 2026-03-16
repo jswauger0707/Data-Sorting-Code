@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universal Data Sorter</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'DM Sans', sans-serif; margin: 0; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .sort-asc::after { content: ' ▲'; font-size: 0.7em; }
+    .sort-desc::after { content: ' ▼'; font-size: 0.7em; }
+    .toast-enter { animation: toastIn 0.35s ease; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+    input:focus, select:focus, textarea:focus { outline: none; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    .tab-active { border-bottom: 2px solid; }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full flex flex-col overflow-auto" style="background:#0f1117;"><!-- Toast container -->
+   <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div><!-- Header -->
+   <header class="w-full px-6 py-5 flex items-center justify-between flex-shrink-0" style="background:#151821; border-bottom: 1px solid #1e2330;">
+    <div class="flex items-center gap-3">
+     <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:#6c5ce7;"><i data-lucide="arrow-up-down" style="width:18px;height:18px;color:#fff;"></i>
+     </div>
+     <div>
+      <h1 id="app-title" class="text-lg font-bold" style="color:#e8eaed;">Universal Data Sorter</h1>
+      <p id="app-subtitle" class="text-xs" style="color:#6b7280;">Sort anything. Perfectly.</p>
+     </div>
+    </div>
+    <div class="flex items-center gap-2"><span id="record-count" class="text-xs mono px-2 py-1 rounded" style="background:#1e2330;color:#6b7280;">0 records</span>
+    </div>
+   </header><!-- Main content -->
+   <main class="flex-1 w-full flex flex-col overflow-hidden"><!-- Tab bar -->
+    <div class="flex px-6 gap-6 flex-shrink-0" style="background:#151821; border-bottom: 1px solid #1e2330;"><button onclick="switchTab('projects')" id="tab-projects" class="py-3 text-sm font-medium tab-active" style="color:#6c5ce7; border-color:#6c5ce7;">Projects</button> <button onclick="switchTab('input')" id="tab-input" class="py-3 text-sm font-medium" style="color:#6b7280; border-color:transparent;">Add Data</button> <button onclick="switchTab('view')" id="tab-view" class="py-3 text-sm font-medium" style="color:#6b7280; border-color:transparent;">View &amp; Sort</button>
+    </div><!-- Tab: Projects -->
+    <div id="panel-projects" class="flex-1 overflow-auto p-6 fade-in">
+     <div class="max-w-3xl mx-auto">
+      <div class="flex items-center justify-between mb-5">
+       <h2 class="text-base font-semibold" style="color:#e8eaed;">Your Projects</h2><button onclick="showNewProjectForm()" class="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg" style="background:#6c5ce7;color:#fff;"> <i data-lucide="plus" style="width:14px;height:14px;"></i> New Project </button>
+      </div><!-- New project form (hidden by default) -->
+      <div id="new-project-form" class="hidden mb-5 p-4 rounded-xl fade-in" style="background:#1a1d28; border:1px solid #2a2d3a;">
+       <div class="mb-3"><label for="proj-name" class="block text-xs font-medium mb-1" style="color:#9ca3af;">Project Name</label> <input id="proj-name" type="text" placeholder="e.g. NBA Season Stats" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#0f1117; border:1px solid #2a2d3a; color:#e8eaed;">
+       </div>
+       <div class="mb-3"><label for="proj-domain" class="block text-xs font-medium mb-1" style="color:#9ca3af;">Domain</label> <select id="proj-domain" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#0f1117; border:1px solid #2a2d3a; color:#e8eaed;"> <option value="sports">🏀 Sports</option> <option value="business">💼 Business</option> <option value="healthcare">🏥 Healthcare</option> <option value="other">📊 Other</option> </select>
+       </div>
+       <div class="mb-3"><label for="proj-columns" class="block text-xs font-medium mb-1" style="color:#9ca3af;">Columns (comma-separated)</label> <input id="proj-columns" type="text" placeholder="e.g. Player, Team, Points, Rebounds" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#0f1117; border:1px solid #2a2d3a; color:#e8eaed;">
+        <p class="text-xs mt-1" style="color:#4b5563;">Define the columns for your data table</p>
+       </div>
+       <div class="flex gap-2 mt-4"><button onclick="createProject()" id="btn-create-proj" class="px-4 py-2 rounded-lg text-sm font-medium" style="background:#6c5ce7;color:#fff;">Create Project</button> <button onclick="hideNewProjectForm()" class="px-4 py-2 rounded-lg text-sm font-medium" style="background:#2a2d3a;color:#9ca3af;">Cancel</button>
+       </div>
+      </div><!-- Project list -->
+      <div id="project-list"></div>
+      <div id="no-projects" class="text-center py-16">
+       <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style="background:#1a1d28;"><i data-lucide="folder-open" style="width:28px;height:28px;color:#4b5563;"></i>
+       </div>
+       <p class="text-sm font-medium" style="color:#6b7280;">No projects yet</p>
+       <p class="text-xs mt-1" style="color:#4b5563;">Create your first project to start sorting data</p>
+      </div>
+     </div>
+    </div><!-- Tab: Input -->
+    <div id="panel-input" class="flex-1 overflow-auto p-6 hidden fade-in">
+     <div class="max-w-3xl mx-auto">
+      <div id="input-no-project" class="text-center py-16">
+       <p class="text-sm" style="color:#6b7280;">Select a project first from the Projects tab.</p>
+      </div>
+      <div id="input-form-area" class="hidden">
+       <div class="flex items-center justify-between mb-5">
+        <div>
+         <h2 class="text-base font-semibold" style="color:#e8eaed;">Add Data to: <span id="input-proj-name" class="mono" style="color:#6c5ce7;"></span></h2>
+         <p class="text-xs mt-0.5" style="color:#4b5563;">Fill in the fields below for each row</p>
+        </div>
+       </div>
+       <div id="input-fields" class="space-y-3 mb-4"></div>
+       <div class="flex gap-2"><button onclick="submitRow()" id="btn-submit-row" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium" style="background:#6c5ce7;color:#fff;"> <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Row </button> <button onclick="clearInputFields()" class="px-4 py-2 rounded-lg text-sm font-medium" style="background:#2a2d3a;color:#9ca3af;">Clear</button>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: View & Sort -->
+    <div id="panel-view" class="flex-1 overflow-auto p-6 hidden fade-in">
+     <div class="w-full max-w-full">
+      <div id="view-no-project" class="text-center py-16">
+       <p class="text-sm" style="color:#6b7280;">Select a project first from the Projects tab.</p>
+      </div>
+      <div id="view-area" class="hidden">
+       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+         <h2 class="text-base font-semibold" style="color:#e8eaed;">Data: <span id="view-proj-name" class="mono" style="color:#6c5ce7;"></span></h2>
+         <p id="view-row-count" class="text-xs mt-0.5" style="color:#4b5563;">0 rows</p>
+        </div>
+        <div class="flex items-center gap-2">
+         <div class="relative"><i data-lucide="search" style="width:14px;height:14px;color:#4b5563;" class="absolute left-2.5 top-1/2 -translate-y-1/2"></i> <input id="search-input" type="text" placeholder="Search..." oninput="applySearchAndSort()" class="pl-8 pr-3 py-1.5 rounded-lg text-sm" style="background:#1a1d28; border:1px solid #2a2d3a; color:#e8eaed; width:180px;">
+         </div><button onclick="exportCSV()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium" style="background:#1a1d28; border:1px solid #2a2d3a; color:#9ca3af;"> <i data-lucide="download" style="width:13px;height:13px;"></i> CSV </button>
+        </div>
+       </div>
+       <div class="overflow-x-auto rounded-xl" style="border:1px solid #2a2d3a;">
+        <table class="w-full text-sm" style="min-width:600px;">
+         <thead id="table-head"></thead>
+         <tbody id="table-body"></tbody>
+        </table>
+       </div>
+       <div id="view-empty" class="hidden text-center py-12">
+        <p class="text-sm" style="color:#6b7280;">No data rows yet. Go to Add Data to begin.</p>
+       </div>
+      </div>
+     </div>
+    </div>
+   </main><!-- Delete row confirmation overlay -->
+   <div id="delete-overlay" class="fixed inset-0 z-40 hidden items-center justify-center" style="background:rgba(0,0,0,0.6);">
+    <div class="p-5 rounded-xl max-w-sm w-full mx-4" style="background:#1a1d28; border:1px solid #2a2d3a;">
+     <p class="text-sm font-medium mb-1" style="color:#e8eaed;">Delete this row?</p>
+     <p class="text-xs mb-4" style="color:#6b7280;">This action cannot be undone.</p>
+     <div class="flex gap-2 justify-end"><button onclick="cancelDeleteRow()" class="px-3 py-1.5 rounded-lg text-sm" style="background:#2a2d3a;color:#9ca3af;">Cancel</button> <button onclick="confirmDeleteRow()" id="btn-confirm-delete" class="px-3 py-1.5 rounded-lg text-sm font-medium" style="background:#ef4444;color:#fff;">Delete</button>
+     </div>
+    </div>
+   </div><!-- Delete project confirmation overlay -->
+   <div id="delete-proj-overlay" class="fixed inset-0 z-40 hidden items-center justify-center" style="background:rgba(0,0,0,0.6);">
+    <div class="p-5 rounded-xl max-w-sm w-full mx-4" style="background:#1a1d28; border:1px solid #2a2d3a;">
+     <p class="text-sm font-medium mb-1" style="color:#e8eaed;">Delete this project?</p>
+     <p class="text-xs mb-4" style="color:#6b7280;">All data in this project will be permanently removed.</p>
+     <div class="flex gap-2 justify-end"><button onclick="cancelDeleteProject()" class="px-3 py-1.5 rounded-lg text-sm" style="background:#2a2d3a;color:#9ca3af;">Cancel</button> <button onclick="confirmDeleteProject()" id="btn-confirm-del-proj" class="px-3 py-1.5 rounded-lg text-sm font-medium" style="background:#ef4444;color:#fff;">Delete Project</button>
+     </div>
+    </div>
+   </div>
+  </div>
+  <script>
+  // ─── State ───
+  let allRecords = [];
+  let activeProjectId = null;
+  let sortCol = null;
+  let sortDir = 'asc';
+  let pendingDeleteRowId = null;
+  let pendingDeleteProjectId = null;
+
+  const defaultConfig = {
+    app_title: 'Universal Data Sorter',
+    subtitle_text: 'Sort anything. Perfectly.',
+    background_color: '#0f1117',
+    surface_color: '#1a1d28',
+    text_color: '#e8eaed',
+    primary_color: '#6c5ce7',
+    secondary_color: '#2a2d3a',
+    font_family: 'DM Sans',
+    font_size: 14
+  };
+
+  // ─── Element SDK ───
+  window.elementSdk.init({
+    defaultConfig,
+    onConfigChange: async (config) => {
+      const bg = config.background_color || defaultConfig.background_color;
+      const surface = config.surface_color || defaultConfig.surface_color;
+      const text = config.text_color || defaultConfig.text_color;
+      const primary = config.primary_color || defaultConfig.primary_color;
+      const secondary = config.secondary_color || defaultConfig.secondary_color;
+      const font = config.font_family || defaultConfig.font_family;
+      const size = config.font_size || defaultConfig.font_size;
+
+      const app = document.getElementById('app');
+      app.style.background = bg;
+      app.style.fontFamily = `${font}, DM Sans, sans-serif`;
+      app.style.fontSize = `${size}px`;
+
+      document.querySelector('header').style.background = darken(bg, 0.04);
+      document.querySelector('header').style.borderColor = secondary;
+
+      const tabBar = document.querySelector('.flex.px-6.gap-6');
+      if (tabBar) { tabBar.style.background = darken(bg, 0.04); tabBar.style.borderColor = secondary; }
+
+      document.getElementById('app-title').textContent = config.app_title || defaultConfig.app_title;
+      document.getElementById('app-title').style.color = text;
+      document.getElementById('app-subtitle').textContent = config.subtitle_text || defaultConfig.subtitle_text;
+      document.getElementById('app-subtitle').style.color = '#6b7280';
+
+      document.querySelectorAll('[style*="background:#6c5ce7"], [style*="background: #6c5ce7"]').forEach(el => {
+        el.style.background = primary;
+      });
+      document.querySelectorAll('[style*="color:#6c5ce7"], [style*="color: #6c5ce7"]').forEach(el => {
+        el.style.color = primary;
+      });
+
+      if (activeProjectId) renderTable();
+    },
+    mapToCapabilities: (config) => ({
+      recolorables: [
+        { get: () => config.background_color || defaultConfig.background_color, set: (v) => { config.background_color = v; window.elementSdk.setConfig({ background_color: v }); } },
+        { get: () => config.surface_color || defaultConfig.surface_color, set: (v) => { config.surface_color = v; window.elementSdk.setConfig({ surface_color: v }); } },
+        { get: () => config.text_color || defaultConfig.text_color, set: (v) => { config.text_color = v; window.elementSdk.setConfig({ text_color: v }); } },
+        { get: () => config.primary_color || defaultConfig.primary_color, set: (v) => { config.primary_color = v; window.elementSdk.setConfig({ primary_color: v }); } },
+        { get: () => config.secondary_color || defaultConfig.secondary_color, set: (v) => { config.secondary_color = v; window.elementSdk.setConfig({ secondary_color: v }); } }
+      ],
+      borderables: [],
+      fontEditable: {
+        get: () => config.font_family || defaultConfig.font_family,
+        set: (v) => { config.font_family = v; window.elementSdk.setConfig({ font_family: v }); }
+      },
+      fontSizeable: {
+        get: () => config.font_size || defaultConfig.font_size,
+        set: (v) => { config.font_size = v; window.elementSdk.setConfig({ font_size: v }); }
+      }
+    }),
+    mapToEditPanelValues: (config) => new Map([
+      ['app_title', config.app_title || defaultConfig.app_title],
+      ['subtitle_text', config.subtitle_text || defaultConfig.subtitle_text]
+    ])
+  });
+
+  function darken(hex, amount) {
+    let r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    r = Math.max(0, Math.round(r * (1 + amount)));
+    g = Math.max(0, Math.round(g * (1 + amount)));
+    b = Math.max(0, Math.round(b * (1 + amount)));
+    return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+  }
+
+  // ─── Data SDK ───
+  const dataHandler = {
+    onDataChanged(data) {
+      allRecords = data;
+      document.getElementById('record-count').textContent = `${data.length} records`;
+      renderProjectList();
+      if (activeProjectId) {
+        renderInputForm();
+        renderTable();
+      }
+    }
+  };
+  (async () => {
+    const res = await window.dataSdk.init(dataHandler);
+    if (!res.isOk) showToast('Failed to initialize data storage', 'error');
+  })();
+
+  // ─── Helpers ───
+  function getProjects() {
+    const map = new Map();
+    allRecords.forEach(r => {
+      if (r.column_config && r.project_name) {
+        if (!map.has(r.project_name)) {
+          map.set(r.project_name, { name: r.project_name, domain: r.domain || 'other', columns: JSON.parse(r.column_config), rows: [], configRecord: r });
+        }
+      }
+    });
+    allRecords.forEach(r => {
+      if (r.row_data && r.project_name && map.has(r.project_name)) {
+        map.get(r.project_name).rows.push(r);
+      }
+    });
+    return map;
+  }
+
+  function getActiveProject() {
+    const projects = getProjects();
+    return projects.get(activeProjectId) || null;
+  }
+
+  const domainIcons = { sports: '🏀', business: '💼', healthcare: '🏥', other: '📊' };
+
+  // ─── Toast ───
+  function showToast(msg, type = 'success') {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = 'toast-enter flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg';
+    t.style.background = type === 'error' ? '#dc2626' : type === 'warning' ? '#d97706' : '#059669';
+    t.style.color = '#fff';
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2500);
+  }
+
+  // ─── Tabs ───
+  function switchTab(tab) {
+    ['projects','input','view'].forEach(t => {
+      const panel = document.getElementById('panel-' + t);
+      const btn = document.getElementById('tab-' + t);
+      if (t === tab) {
+        panel.classList.remove('hidden');
+        panel.classList.add('fade-in');
+        btn.style.color = '#6c5ce7';
+        btn.style.borderColor = '#6c5ce7';
+        btn.classList.add('tab-active');
+      } else {
+        panel.classList.add('hidden');
+        btn.style.color = '#6b7280';
+        btn.style.borderColor = 'transparent';
+        btn.classList.remove('tab-active');
+      }
+    });
+    if (tab === 'view' && activeProjectId) applySearchAndSort();
+  }
+
+  // ─── Projects ───
+  function showNewProjectForm() { document.getElementById('new-project-form').classList.remove('hidden'); }
+  function hideNewProjectForm() {
+    document.getElementById('new-project-form').classList.add('hidden');
+    document.getElementById('proj-name').value = '';
+    document.getElementById('proj-columns').value = '';
+  }
+
+  async function createProject() {
+    const name = document.getElementById('proj-name').value.trim();
+    const domain = document.getElementById('proj-domain').value;
+    const colsRaw = document.getElementById('proj-columns').value.trim();
+    if (!name) { showToast('Project name is required', 'error'); return; }
+    if (!colsRaw) { showToast('Enter at least one column', 'error'); return; }
+
+    const existing = getProjects();
+    if (existing.has(name)) { showToast('A project with that name already exists', 'error'); return; }
+
+    if (allRecords.length >= 999) { showToast('Storage limit reached (999 records). Delete some data first.', 'warning'); return; }
+
+    const columns = colsRaw.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    if (columns.length === 0) { showToast('Enter at least one valid column name', 'error'); return; }
+    if (columns.length > 50) { showToast('Maximum 50 columns allowed', 'error'); return; }
+
+    const btn = document.getElementById('btn-create-proj');
+    btn.disabled = true; btn.textContent = 'Creating...';
+
+    const res = await window.dataSdk.create({
+      project_name: name,
+      row_data: '',
+      column_config: JSON.stringify(columns),
+      domain: domain,
+      created_at: new Date().toISOString()
+    });
+
+    btn.disabled = false; btn.textContent = 'Create Project';
+
+    if (res.isOk) {
+      showToast(`Project "${name}" created!`);
+      hideNewProjectForm();
+      activeProjectId = name;
+      switchTab('input');
+    } else {
+      showToast('Failed to create project', 'error');
+    }
+  }
+
+  function selectProject(name) {
+    activeProjectId = name;
+    sortCol = null;
+    sortDir = 'asc';
+    renderProjectList();
+    renderInputForm();
+    renderTable();
+    switchTab('input');
+  }
+
+  function renderProjectList() {
+    const projects = getProjects();
+    const list = document.getElementById('project-list');
+    const empty = document.getElementById('no-projects');
+
+    if (projects.size === 0) {
+      list.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+
+    const existingCards = new Map([...list.children].map(el => [el.dataset.projectName, el]));
+    const seen = new Set();
+
+    projects.forEach((proj, name) => {
+      seen.add(name);
+      const isActive = name === activeProjectId;
+      if (existingCards.has(name)) {
+        updateProjectCard(existingCards.get(name), proj, isActive);
+      } else {
+        const card = createProjectCard(proj, isActive);
+        list.appendChild(card);
+      }
+    });
+
+    existingCards.forEach((el, name) => { if (!seen.has(name)) el.remove(); });
+  }
+
+  function createProjectCard(proj, isActive) {
+    const card = document.createElement('div');
+    card.dataset.projectName = proj.name;
+    card.className = 'p-4 rounded-xl mb-3 cursor-pointer transition-all';
+    card.style.cssText = `background:#1a1d28; border:2px solid ${isActive ? '#6c5ce7' : '#2a2d3a'};`;
+    card.onclick = () => selectProject(proj.name);
+    updateProjectCardInner(card, proj, isActive);
+    return card;
+  }
+
+  function updateProjectCard(card, proj, isActive) {
+    card.style.borderColor = isActive ? '#6c5ce7' : '#2a2d3a';
+    card.onclick = () => selectProject(proj.name);
+    updateProjectCardInner(card, proj, isActive);
+  }
+
+  function updateProjectCardInner(card, proj, isActive) {
+    card.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-xl">${domainIcons[proj.domain] || '📊'}</span>
+          <div>
+            <p class="text-sm font-semibold" style="color:#e8eaed;">${esc(proj.name)}</p>
+            <p class="text-xs" style="color:#6b7280;">${proj.columns.length} columns · ${proj.rows.length} rows · ${proj.domain}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          ${isActive ? '<span class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:#6c5ce720;color:#6c5ce7;">Active</span>' : ''}
+          <button onclick="event.stopPropagation(); promptDeleteProject('${esc(proj.name)}')" class="p-1.5 rounded-lg hover:opacity-80" style="color:#6b7280;" title="Delete project"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+        </div>
+      </div>`;
+    lucide.createIcons({ nameAttr: 'data-lucide' });
+  }
+
+  // ─── Delete project ───
+  function promptDeleteProject(name) {
+    pendingDeleteProjectId = name;
+    document.getElementById('delete-proj-overlay').classList.remove('hidden');
+    document.getElementById('delete-proj-overlay').classList.add('flex');
+  }
+  function cancelDeleteProject() {
+    pendingDeleteProjectId = null;
+    document.getElementById('delete-proj-overlay').classList.add('hidden');
+    document.getElementById('delete-proj-overlay').classList.remove('flex');
+  }
+  async function confirmDeleteProject() {
+    if (!pendingDeleteProjectId) return;
+    const btn = document.getElementById('btn-confirm-del-proj');
+    btn.disabled = true; btn.textContent = 'Deleting...';
+
+    const toDelete = allRecords.filter(r => r.project_name === pendingDeleteProjectId);
+    for (const rec of toDelete) {
+      await window.dataSdk.delete(rec);
+    }
+
+    if (activeProjectId === pendingDeleteProjectId) activeProjectId = null;
+    btn.disabled = false; btn.textContent = 'Delete Project';
+    cancelDeleteProject();
+    showToast('Project deleted');
+  }
+
+  // ─── Input form ───
+  function renderInputForm() {
+    const proj = getActiveProject();
+    if (!proj) {
+      document.getElementById('input-no-project').classList.remove('hidden');
+      document.getElementById('input-form-area').classList.add('hidden');
+      return;
+    }
+    document.getElementById('input-no-project').classList.add('hidden');
+    document.getElementById('input-form-area').classList.remove('hidden');
+    document.getElementById('input-proj-name').textContent = proj.name;
+
+    const fieldsDiv = document.getElementById('input-fields');
+    // Only rebuild if columns changed
+    const currentCols = fieldsDiv.dataset.columns;
+    const newCols = proj.columns.join(',');
+    if (currentCols === newCols) return;
+    fieldsDiv.dataset.columns = newCols;
+
+    fieldsDiv.innerHTML = '';
+    proj.columns.forEach((col, i) => {
+      const div = document.createElement('div');
+      div.innerHTML = `
+        <label for="field-${i}" class="block text-xs font-medium mb-1" style="color:#9ca3af;">${esc(col)}</label>
+        <input id="field-${i}" type="text" placeholder="Enter ${esc(col)}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#0f1117; border:1px solid #2a2d3a; color:#e8eaed;">
+      `;
+      fieldsDiv.appendChild(div);
+    });
+  }
+
+  function clearInputFields() {
+    const proj = getActiveProject();
+    if (!proj) return;
+    proj.columns.forEach((_, i) => {
+      const el = document.getElementById('field-' + i);
+      if (el) el.value = '';
+    });
+  }
+
+  async function submitRow() {
+    const proj = getActiveProject();
+    if (!proj) return;
+
+    if (allRecords.length >= 999) { showToast('Storage limit reached (999 records). Delete some data first.', 'warning'); return; }
+
+    const values = {};
+    let hasValue = false;
+    proj.columns.forEach((col, i) => {
+      const v = (document.getElementById('field-' + i)?.value || '').trim();
+      values[col] = v;
+      if (v) hasValue = true;
+    });
+
+    if (!hasValue) { showToast('Enter at least one field value', 'error'); return; }
+
+    const btn = document.getElementById('btn-submit-row');
+    btn.disabled = true; btn.innerHTML = '<span>Adding...</span>';
+
+    const res = await window.dataSdk.create({
+      project_name: proj.name,
+      row_data: JSON.stringify(values),
+      column_config: '',
+      domain: '',
+      created_at: new Date().toISOString()
+    });
+
+    btn.disabled = false; btn.innerHTML = '<i data-lucide="plus" style="width:14px;height:14px;"></i> Add Row';
+    lucide.createIcons({ nameAttr: 'data-lucide' });
+
+    if (res.isOk) {
+      showToast('Row added!');
+      clearInputFields();
+    } else {
+      showToast('Failed to add row', 'error');
+    }
+  }
+
+  // ─── Table / Sort / Search ───
+  function renderTable() {
+    const proj = getActiveProject();
+    const viewNo = document.getElementById('view-no-project');
+    const viewArea = document.getElementById('view-area');
+    if (!proj) {
+      viewNo.classList.remove('hidden');
+      viewArea.classList.add('hidden');
+      return;
+    }
+    viewNo.classList.add('hidden');
+    viewArea.classList.remove('hidden');
+    document.getElementById('view-proj-name').textContent = proj.name;
+
+    // Build head
+    const thead = document.getElementById('table-head');
+    thead.innerHTML = `<tr>${proj.columns.map(col => {
+      const isActive = sortCol === col;
+      const cls = isActive ? (sortDir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
+      return `<th class="px-4 py-3 text-left text-xs font-semibold cursor-pointer select-none whitespace-nowrap ${cls}" style="background:#151821; color:#9ca3af; border-bottom:1px solid #2a2d3a;" onclick="toggleSort('${esc(col)}')">${esc(col)}</th>`;
+    }).join('')}<th class="px-3 py-3 text-xs font-semibold" style="background:#151821; color:#9ca3af; border-bottom:1px solid #2a2d3a; width:40px;"></th></tr>`;
+
+    applySearchAndSort();
+  }
+
+  function toggleSort(col) {
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = col;
+      sortDir = 'asc';
+    }
+    renderTable();
+  }
+
+  function applySearchAndSort() {
+    const proj = getActiveProject();
+    if (!proj) return;
+
+    const search = (document.getElementById('search-input')?.value || '').toLowerCase();
+
+    let rows = proj.rows.map(r => {
+      try { return { record: r, data: JSON.parse(r.row_data) }; }
+      catch { return null; }
+    }).filter(Boolean);
+
+    // Search
+    if (search) {
+      rows = rows.filter(r => proj.columns.some(col => String(r.data[col] || '').toLowerCase().includes(search)));
+    }
+
+    // Sort — precise type-aware sorting
+    if (sortCol) {
+      rows.sort((a, b) => {
+        let va = a.data[sortCol] ?? '';
+        let vb = b.data[sortCol] ?? '';
+
+        // Attempt numeric comparison
+        const na = parseFloat(va);
+        const nb = parseFloat(vb);
+        const aIsNum = !isNaN(na) && String(va).trim() !== '';
+        const bIsNum = !isNaN(nb) && String(vb).trim() !== '';
+
+        if (aIsNum && bIsNum) {
+          return sortDir === 'asc' ? na - nb : nb - na;
+        }
+
+        // Date detection
+        const da = tryParseDate(va);
+        const db = tryParseDate(vb);
+        if (da && db) {
+          return sortDir === 'asc' ? da - db : db - da;
+        }
+
+        // String comparison (locale-aware, case-insensitive)
+        const sa = String(va).toLowerCase();
+        const sb = String(vb).toLowerCase();
+        const cmp = sa.localeCompare(sb, undefined, { numeric: true, sensitivity: 'base' });
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    const tbody = document.getElementById('table-body');
+    const viewEmpty = document.getElementById('view-empty');
+    document.getElementById('view-row-count').textContent = `${rows.length} row${rows.length !== 1 ? 's' : ''}`;
+
+    if (rows.length === 0) {
+      tbody.innerHTML = '';
+      viewEmpty.classList.remove('hidden');
+      document.querySelector('.overflow-x-auto')?.classList.add('hidden');
+      return;
+    }
+    viewEmpty.classList.add('hidden');
+    document.querySelector('.overflow-x-auto')?.classList.remove('hidden');
+
+    // Efficient DOM update
+    const existingRows = new Map([...tbody.children].map(el => [el.dataset.rowId, el]));
+    const fragment = document.createDocumentFragment();
+    const seen = new Set();
+
+    rows.forEach(({ record, data }) => {
+      const id = record.__backendId;
+      seen.add(id);
+      if (existingRows.has(id)) {
+        const tr = existingRows.get(id);
+        updateTableRow(tr, data, record, proj.columns);
+        fragment.appendChild(tr);
+      } else {
+        fragment.appendChild(createTableRow(data, record, proj.columns));
+      }
+    });
+
+    existingRows.forEach((el, id) => { if (!seen.has(id)) el.remove(); });
+    tbody.innerHTML = '';
+    tbody.appendChild(fragment);
+  }
+
+  function createTableRow(data, record, columns) {
+    const tr = document.createElement('tr');
+    tr.dataset.rowId = record.__backendId;
+    tr.style.borderBottom = '1px solid #1e2330';
+    updateTableRowInner(tr, data, record, columns);
+    return tr;
+  }
+
+  function updateTableRow(tr, data, record, columns) {
+    updateTableRowInner(tr, data, record, columns);
+  }
+
+  function updateTableRowInner(tr, data, record, columns) {
+    tr.innerHTML = columns.map(col => {
+      const val = data[col] ?? '';
+      return `<td class="px-4 py-2.5 text-sm mono whitespace-nowrap" style="color:#d1d5db;">${esc(String(val))}</td>`;
+    }).join('') + `<td class="px-3 py-2.5"><button onclick="promptDeleteRow('${record.__backendId}')" class="p-1 rounded hover:opacity-70" style="color:#6b7280;" title="Delete row"><i data-lucide="x" style="width:13px;height:13px;"></i></button></td>`;
+    lucide.createIcons({ nameAttr: 'data-lucide' });
+  }
+
+  // ─── Delete row ───
+  function promptDeleteRow(id) {
+    pendingDeleteRowId = id;
+    document.getElementById('delete-overlay').classList.remove('hidden');
+    document.getElementById('delete-overlay').classList.add('flex');
+  }
+  function cancelDeleteRow() {
+    pendingDeleteRowId = null;
+    document.getElementById('delete-overlay').classList.add('hidden');
+    document.getElementById('delete-overlay').classList.remove('flex');
+  }
+  async function confirmDeleteRow() {
+    if (!pendingDeleteRowId) return;
+    const rec = allRecords.find(r => r.__backendId === pendingDeleteRowId);
+    if (!rec) { cancelDeleteRow(); return; }
+    const btn = document.getElementById('btn-confirm-delete');
+    btn.disabled = true; btn.textContent = 'Deleting...';
+    const res = await window.dataSdk.delete(rec);
+    btn.disabled = false; btn.textContent = 'Delete';
+    cancelDeleteRow();
+    if (res.isOk) showToast('Row deleted');
+    else showToast('Failed to delete row', 'error');
+  }
+
+  // ─── Date parser ───
+  function tryParseDate(val) {
+    if (typeof val !== 'string' || val.trim() === '') return null;
+    // Common date patterns
+    const patterns = [
+      /^\d{4}-\d{2}-\d{2}$/,
+      /^\d{1,2}\/\d{1,2}\/\d{2,4}$/,
+      /^\d{1,2}-\d{1,2}-\d{2,4}$/,
+      /^[A-Za-z]+ \d{1,2},? \d{4}$/
+    ];
+    if (!patterns.some(p => p.test(val.trim()))) return null;
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  // ─── CSV Export ───
+  function exportCSV() {
+    const proj = getActiveProject();
+    if (!proj || proj.rows.length === 0) { showToast('No data to export', 'warning'); return; }
+
+    const rows = proj.rows.map(r => { try { return JSON.parse(r.row_data); } catch { return null; } }).filter(Boolean);
+    const header = proj.columns.map(c => `"${c.replace(/"/g,'""')}"`).join(',');
+    const body = rows.map(r => proj.columns.map(c => {
+      const v = String(r[c] ?? '').replace(/"/g, '""');
+      return `"${v}"`;
+    }).join(',')).join('\n');
+
+    const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${proj.name.replace(/\s+/g,'_')}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    showToast('CSV downloaded!');
+  }
+
+  // ─── Escape HTML ───
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  // Initialize icons
+  lucide.createIcons();
+</script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9dd0e32f1082a8a9',t:'MTc3MzYzNDAwOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
